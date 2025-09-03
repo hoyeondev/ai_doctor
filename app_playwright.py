@@ -3,13 +3,8 @@
 
 import gradio as gr
 from transformers import pipeline
-import requests
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
-from bs4 import BeautifulSoup
+import asyncio
+from playwright.async_api import async_playwright
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
@@ -31,50 +26,36 @@ except Exception as e:
 print("✅ 모델 로딩 완료!")
 
 # 2️⃣ 네이버 영화 리뷰 크롤링 함수
-def crawl_naver_movie_reviews(movie_title, max_reviews=10):
-    """네이버 영화에서 리뷰를 크롤링하는 함수"""
+async def crawl_naver_movie_reviews(movie_title, max_reviews=10):
     reviews = []
-    
-    try:
 
-        # embed(globals(), locals())
-        chrome_options = Options()
-        # chrome_options.add_argument("--headless")  # 브라우저 안 띄우기
-        chrome_options.add_argument("--disable-dev-shm-usage")
+    async with async_playwright() as p:
+        # Chromium 브라우저 실행 (headless = True 기본값)
+        # browser = await p.chromium.launch()
+        browser = await p.chromium.launch(
+            headless=True,        # GUI 없이 실행
+            args=["--no-sandbox"] # Spaces에서 필수 옵션
+        )
+        page = await browser.new_page()
 
-        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()),options=chrome_options)
-        # 네이버 영화 검색 URL
-        search_url = f"https://search.naver.com/search.naver?where=nexearch&sm=tab_etc&mra=bkEw&pkid=68&os=36885745&qvt=0&query=영화 {quote(movie_title)} 평점"
+        # 영화 리뷰 검색 URL
+        search_url = f"https://search.naver.com/search.naver?query=영화 {movie_title} 평점"
+        await page.goto(search_url)
 
-        driver.get(search_url)
-        driver.implicitly_wait(5)
+        # 페이지 로딩 대기
+        await page.wait_for_timeout(2000)
 
-        search_buttons = driver.find_elements(By.CSS_SELECTOR, "button.bt_search")
-        if search_buttons:
-            search_buttons[0].click()  # 첫 번째 버튼 클릭
-        else:
-            print("검색 버튼을 찾을 수 없습니다.")
+        # 리뷰 요소 찾기 (최대 max_reviews 개)
+        review_elements = await page.query_selector_all(".area_review_content .desc._text")
 
-        
-        driver.implicitly_wait(5)
+        for elem in review_elements[:max_reviews]:
+            text = await elem.inner_text()
+            reviews.append(text.strip())
 
-        review_elements = driver.find_elements(By.CSS_SELECTOR, ".area_review_content .desc._text")
+        await browser.close()
 
-        # 텍스트 추출(10개만)
-        # reviews = [elem.text for elem in review_elements]
-        reviews = [elem.text for elem in review_elements[:10]]
+    return reviews, f"✅ {len(reviews)}개의 리뷰를 수집했습니다."
 
-        # 결과 출력
-        # for i, review in enumerate(reviews, 1):
-        #     print(f"{i}: {review}")
-                
-
-        return reviews[:max_reviews], f"✅ {len(reviews)}개의 리뷰를 수집했습니다."
-        
-    except requests.RequestException as e:
-        return [], f"❌ 네트워크 오류: {str(e)}"
-    except Exception as e:
-        return [], f"❌ 크롤링 오류: {str(e)}"
 
 # 3️⃣ 샘플 리뷰 데이터 (크롤링 실패 시 사용)
 sample_reviews = {
@@ -223,7 +204,8 @@ def analyze_movie_reviews(movie_title, max_reviews=10):
     
     try:
         # 1단계: 리뷰 수집
-        reviews, crawl_msg = crawl_naver_movie_reviews(movie_title, max_reviews)
+        # reviews, crawl_msg = crawl_naver_movie_reviews(movie_title, max_reviews)
+        reviews, crawl_msg = asyncio.run(crawl_naver_movie_reviews(movie_title, max_reviews=10))
         
         # 크롤링 실패 시 샘플 데이터 사용
         if not reviews:
