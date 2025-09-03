@@ -8,6 +8,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 import plotly.express as px
 import plotly.graph_objects as go
@@ -36,10 +37,12 @@ def crawl_naver_movie_reviews(movie_title, max_reviews=10):
     
     try:
 
-        embed(globals(), locals())
+        # embed(globals(), locals())
         chrome_options = Options()
         # chrome_options.add_argument("--headless")  # 브라우저 안 띄우기
-        driver = webdriver.Chrome(service=Service("chromedriver.exe"), options=chrome_options)
+        chrome_options.add_argument("--disable-dev-shm-usage")
+
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()),options=chrome_options)
         # 네이버 영화 검색 URL
         # search_url = f"https://movie.naver.com/movie/search/result.naver?query={quote(movie_title)}&section=movie"
         search_url = f"https://search.naver.com/search.naver?where=nexearch&sm=tab_etc&mra=bkEw&pkid=68&os=36885745&qvt=0&query=영화 {quote(movie_title)} 평점"
@@ -47,44 +50,26 @@ def crawl_naver_movie_reviews(movie_title, max_reviews=10):
         driver.get(search_url)
         driver.implicitly_wait(5)
 
+        search_buttons = driver.find_elements(By.CSS_SELECTOR, "button.bt_search")
+        if search_buttons:
+            search_buttons[0].click()  # 첫 번째 버튼 클릭
+        else:
+            print("검색 버튼을 찾을 수 없습니다.")
 
-        review_elements = driver.find_elements(By.CSS_SELECTOR, "span[id^='_filtered_ment_']")
+        
+        driver.implicitly_wait(5)
+
+        review_elements = driver.find_elements(By.CSS_SELECTOR, ".area_review_content .desc._text")
+
+        # 텍스트 추출
         reviews = [elem.text for elem in review_elements]
 
-        
-        # headers = {
-        #     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        # }
-        
-        # # 영화 검색
-        # response = requests.get(search_url, headers=headers, timeout=10)
-        # soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # # 첫 번째 영화 결과의 링크 찾기
-        # movie_links = soup.find_all('a', href=True)
-        # movie_code = None
-        
-        # for link in movie_links:
-        #     href = link.get('href', '')
-        #     if '/movie/bi/mi/basic.naver?code=' in href:
-        #         movie_code = href.split('code=')[1].split('&')[0]
-        #         break
-        
-        # if not movie_code:
-        #     return [], "영화를 찾을 수 없습니다."
-        
-        # # 리뷰 페이지 URL
-        # review_url = f"https://search.naver.com/search.naver?where=nexearch&sm=tab_etc&mra=bkEw&pkid=68&os=36885745&qvt=0&query=영화 {movie_code} 평점"
-        
-        # review_response = requests.get(review_url, headers=headers, timeout=10)
-        # review_soup = BeautifulSoup(review_response.content, 'html.parser')
-        
-        # # 리뷰 추출
-        # review_elements = review_soup.find_all('span', {'id': re.compile(r'_filtered_ment_\d+')})
-        
-        
-        # return reviews[:max_reviews], f"✅ {len(reviews)}개의 리뷰를 수집했습니다."
-        return []
+        # 결과 출력
+        for i, review in enumerate(reviews, 1):
+            print(f"{i}: {review}")
+                
+
+        return reviews[:max_reviews], f"✅ {len(reviews)}개의 리뷰를 수집했습니다."
         
     except requests.RequestException as e:
         return [], f"❌ 네트워크 오류: {str(e)}"
