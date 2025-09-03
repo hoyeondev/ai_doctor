@@ -44,7 +44,6 @@ def crawl_naver_movie_reviews(movie_title, max_reviews=10):
 
         driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()),options=chrome_options)
         # 네이버 영화 검색 URL
-        # search_url = f"https://movie.naver.com/movie/search/result.naver?query={quote(movie_title)}&section=movie"
         search_url = f"https://search.naver.com/search.naver?where=nexearch&sm=tab_etc&mra=bkEw&pkid=68&os=36885745&qvt=0&query=영화 {quote(movie_title)} 평점"
 
         driver.get(search_url)
@@ -61,8 +60,9 @@ def crawl_naver_movie_reviews(movie_title, max_reviews=10):
 
         review_elements = driver.find_elements(By.CSS_SELECTOR, ".area_review_content .desc._text")
 
-        # 텍스트 추출
-        reviews = [elem.text for elem in review_elements]
+        # 텍스트 추출(10개만)
+        # reviews = [elem.text for elem in review_elements]
+        reviews = [elem.text for elem in review_elements[:10]]
 
         # 결과 출력
         for i, review in enumerate(reviews, 1):
@@ -245,17 +245,17 @@ def analyze_movie_reviews(movie_title, max_reviews=10):
         # 5단계: 요약 메시지 생성
         positive_count = sum(1 for r in results if r['sentiment'] == '긍정')
         negative_count = sum(1 for r in results if r['sentiment'] == '부정')
-        neutral_count = sum(1 for r in results if r['sentiment'] == '중립')
         
-        summary = f"""📊 **'{movie_title}' 리뷰 감정 분석 결과**
+        summary = f"""📊 '{movie_title}' 리뷰 감정 분석 결과
 
         {crawl_msg}
 
-        📈 **분석 결과:**
+        📈 **분석 결과**:
         • 😊 긍정: {positive_count}개 ({positive_count/len(results)*100:.1f}%)
+        
         • 😞 부정: {negative_count}개 ({negative_count/len(results)*100:.1f}%)  
 
-        💡 **종합 평가:** {'긍정적' if positive_count > negative_count else '부정적' if negative_count > positive_count else '중립적'} 반응"""
+        💡 종합 평가: {'긍정적' if positive_count > negative_count else '부정적'} 반응"""
         
         return summary, chart, table
         
@@ -280,14 +280,14 @@ def create_app():
             with gr.Column(scale=2):
                 movie_input = gr.Textbox(
                     label="🎥 영화 제목",
-                    placeholder="예: 기생충, 어벤져스, 타이타닉...",
+                    placeholder="예: 좀비딸, 기생충, 타이타닉...",
                     lines=1
                 )
                 
                 review_count = gr.Slider(
                     label="📊 분석할 리뷰 개수",
                     minimum=5,
-                    maximum=20,
+                    maximum=10,
                     value=10,
                     step=1
                 )
@@ -297,8 +297,7 @@ def create_app():
             with gr.Column(scale=1):
                 gr.Markdown("""
                 ### 💡 사용 팁
-                - 한국어 영화 제목 권장
-                - 분석 완료까지 10-30초 소요
+                - 분석 완료까지 10-30초 소요됩니다.
                 """)
         
         # 결과 출력 영역
@@ -314,8 +313,8 @@ def create_app():
                 sentiment_chart = gr.Plot(label="📈 감정 분포 차트")
         
         # 상세 결과 테이블
+        gr.Markdown("**📝 리뷰별 상세 분석 결과**")
         result_table = gr.Dataframe(
-            label="📝 리뷰별 상세 분석 결과",
             headers=["순번", "리뷰 내용", "감정", "신뢰도"],
             datatype=["str", "str", "str", "str"],
             wrap=True
