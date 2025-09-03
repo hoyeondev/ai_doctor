@@ -1,34 +1,22 @@
 # 필요한 라이브러리 설치
-# pip install transformers torch gradio
+# pip install transformers gradio
 
 import gradio as gr
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-import torch
-import torch.nn.functional as F
+from transformers import pipeline
 
-# 1️⃣ 한국어 감정 분석 모델 로드
+# 1️⃣ 한국어 감정 분석 파이프라인 생성
 # https://huggingface.co/WhitePeak/bert-base-cased-Korean-sentiment
-model_name = "WhitePeak/bert-base-cased-Korean-sentiment"
-
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForSequenceClassification.from_pretrained(model_name)
+sentiment_pipeline = pipeline("sentiment-analysis", model="WhitePeak/bert-base-cased-Korean-sentiment")
 
 # 2️⃣ 감정 분석 함수
 def analyze_sentiment(review):
-    # 토크나이징
-    inputs = tokenizer(review, return_tensors="pt", truncation=True, max_length=512)
+    result = sentiment_pipeline(review)[0]  # 결과는 리스트로 반환
+    label = result['label']  # "positive" 또는 "negative"
+    score = result['score']
     
-    # 모델 예측
-    with torch.no_grad():
-        outputs = model(**inputs)
-        probs = F.softmax(outputs.logits, dim=-1)
-    
-    # 레이블 매핑
-    labels = ["부정", "중립", "긍정"]
-    max_idx = torch.argmax(probs).item()
-    score = probs[0][max_idx].item()
-    
-    return f"감정: {labels[max_idx]}, 확률: {score:.2f}"
+    # 한글 레이블로 변환
+    label_map = {"LABEL_0": "부정", "LABEL_1": "긍정"}
+    return f"감정: {label_map.get(label, label)}, 확률: {score:.2f}"
 
 # 3️⃣ Gradio 웹앱 인터페이스
 iface = gr.Interface(
